@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 import "./globals.css";
 
 /* ---------- Font ---------- */
@@ -83,7 +84,9 @@ export default function RootLayout({
         className="min-h-full flex flex-col bg-[#0A0F1C] text-gray-100 font-sans"
         suppressHydrationWarning
       >
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

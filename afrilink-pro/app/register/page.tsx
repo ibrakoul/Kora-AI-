@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Eye, EyeOff, ArrowRight, Mail, Lock, User, Building2, GraduationCap, Briefcase, Loader2, CheckCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Eye, EyeOff, ArrowRight, Mail, Lock, User, Building2,
+  GraduationCap, Briefcase, Loader2, CheckCircle, AlertCircle,
+} from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 const accountTypes = [
   { id: "professional", label: "Professionnel", icon: User, desc: "Employé, cadre, dirigeant" },
@@ -11,10 +16,19 @@ const accountTypes = [
   { id: "freelance", label: "Freelance", icon: Briefcase, desc: "Indépendant, consultant" },
 ];
 
+const countries = [
+  "Sénégal", "Côte d'Ivoire", "Ghana", "Nigeria", "Kenya", "Cameroun",
+  "Mali", "Burkina Faso", "Guinée", "Togo", "Bénin", "Niger",
+  "Maroc", "Algérie", "Tunisie", "Égypte", "Éthiopie", "Afrique du Sud",
+  "Rwanda", "Tanzania", "Ouganda", "Mozambique", "Madagascar", "Angola",
+];
+
 export default function RegisterPage() {
+  const router = useRouter();
   const [step, setStep] = useState(1);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [accountType, setAccountType] = useState("");
   const [form, setForm] = useState({
     firstName: "",
@@ -27,19 +41,48 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (step === 1) { setStep(2); return; }
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 1800));
-    setLoading(false);
-    window.location.href = "/dashboard";
-  };
+    setError(null);
 
-  const countries = [
-    "Sénégal", "Côte d'Ivoire", "Ghana", "Nigeria", "Kenya", "Cameroun",
-    "Mali", "Burkina Faso", "Guinée", "Togo", "Bénin", "Niger",
-    "Maroc", "Algérie", "Tunisie", "Égypte", "Éthiopie", "Afrique du Sud",
-    "Rwanda", "Tanzania", "Ouganda", "Mozambique", "Madagascar", "Angola",
-  ];
+    if (step === 1) {
+      setStep(2);
+      return;
+    }
+
+    if (!accountType) {
+      setError("Veuillez sélectionner votre type de profil.");
+      return;
+    }
+
+    setLoading(true);
+    const supabase = createClient();
+
+    const { error } = await supabase.auth.signUp({
+      email: form.email,
+      password: form.password,
+      options: {
+        data: {
+          first_name: form.firstName,
+          last_name: form.lastName,
+          account_type: accountType,
+          country: form.country,
+        },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      setError(
+        error.message.includes("already registered")
+          ? "Cet email est déjà utilisé. Connectez-vous."
+          : error.message
+      );
+      setLoading(false);
+      return;
+    }
+
+    router.push("/dashboard");
+    router.refresh();
+  };
 
   return (
     <div className="min-h-screen bg-[#0A0F1C] flex">
@@ -64,12 +107,10 @@ export default function RegisterPage() {
               Créez votre profil en 2 minutes et accédez à des milliers d'opportunités sur tout le continent.
             </p>
 
-            {/* Steps indicator */}
             <div className="mt-8 space-y-3">
               {[
                 { step: 1, label: "Informations de base", done: step > 1 },
                 { step: 2, label: "Type de compte & localisation", done: false },
-                { step: 3, label: "Profil complet", done: false },
               ].map(({ step: s, label, done }) => (
                 <div key={s} className="flex items-center gap-3">
                   <div
@@ -83,11 +124,7 @@ export default function RegisterPage() {
                   >
                     {done ? <CheckCircle size={14} /> : s}
                   </div>
-                  <span
-                    className={`text-sm ${
-                      step === s ? "text-white font-medium" : done ? "text-emerald-400" : "text-gray-600"
-                    }`}
-                  >
+                  <span className={`text-sm ${step === s ? "text-white font-medium" : done ? "text-emerald-400" : "text-gray-600"}`}>
                     {label}
                   </span>
                 </div>
@@ -119,7 +156,6 @@ export default function RegisterPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12 relative">
         <div className="absolute inset-0 dot-grid opacity-30" />
         <div className="relative w-full max-w-lg">
-          {/* Mobile logo */}
           <Link href="/" className="inline-flex items-center gap-2 mb-8 lg:hidden">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center">
               <span className="text-white font-bold text-sm">A</span>
@@ -138,10 +174,16 @@ export default function RegisterPage() {
             </p>
           </div>
 
+          {error && (
+            <div className="flex items-center gap-2 p-3 mb-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+              <AlertCircle size={16} className="shrink-0" />
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {step === 1 ? (
               <>
-                {/* Social buttons */}
                 <div className="grid grid-cols-2 gap-3">
                   {[
                     { label: "Google", icon: "G" },
@@ -254,7 +296,6 @@ export default function RegisterPage() {
               </>
             ) : (
               <>
-                {/* Account type */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-3">
                     Quel est votre profil ?
@@ -279,7 +320,6 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                {/* Country */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1.5">Pays</label>
                   <select
@@ -295,7 +335,6 @@ export default function RegisterPage() {
                   </select>
                 </div>
 
-                {/* Terms */}
                 <div className="flex items-start gap-3">
                   <input
                     type="checkbox"
@@ -320,7 +359,7 @@ export default function RegisterPage() {
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={() => setStep(1)}
+                    onClick={() => { setStep(1); setError(null); }}
                     className="flex-1 py-3.5 border border-[#1f2d45] text-gray-300 font-semibold rounded-xl hover:border-[#2d4060] hover:text-white transition-all"
                   >
                     Retour

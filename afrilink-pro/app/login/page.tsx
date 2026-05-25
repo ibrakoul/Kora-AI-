@@ -2,19 +2,43 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Eye, EyeOff, ArrowRight, Mail, Lock, Loader2 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Eye, EyeOff, ArrowRight, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirectTo") || "/dashboard";
+
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ email: "", password: "" });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setLoading(false);
-    window.location.href = "/dashboard";
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: form.email,
+      password: form.password,
+    });
+
+    if (error) {
+      setError(
+        error.message === "Invalid login credentials"
+          ? "Email ou mot de passe incorrect."
+          : error.message
+      );
+      setLoading(false);
+      return;
+    }
+
+    router.push(redirectTo);
+    router.refresh();
   };
 
   return (
@@ -42,6 +66,14 @@ export default function LoginPage() {
             </p>
           </div>
 
+          {/* Error */}
+          {error && (
+            <div className="flex items-center gap-2 p-3 mb-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+              <AlertCircle size={16} className="shrink-0" />
+              {error}
+            </div>
+          )}
+
           {/* Social login */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             {[
@@ -50,6 +82,7 @@ export default function LoginPage() {
             ].map(({ label, icon, color }) => (
               <button
                 key={label}
+                type="button"
                 className={`flex items-center justify-center gap-2 py-3 rounded-xl border border-[#1f2d45] text-gray-300 hover:text-white text-sm font-semibold glass transition-all ${color}`}
               >
                 <span className="w-5 h-5 flex items-center justify-center text-xs font-bold">{icon}</span>
@@ -87,7 +120,7 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-medium text-gray-300">Mot de passe</label>
-                <Link href="#" className="text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
+                <Link href="/forgot-password" className="text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
                   Mot de passe oublié ?
                 </Link>
               </div>
@@ -110,17 +143,6 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="remember"
-                className="w-4 h-4 rounded border-[#1f2d45] bg-[#1a2236] accent-emerald-500"
-              />
-              <label htmlFor="remember" className="text-sm text-gray-400">
-                Se souvenir de moi
-              </label>
             </div>
 
             <button
@@ -170,7 +192,6 @@ export default function LoginPage() {
             2.4 millions de professionnels africains connectés. Rejoignez le mouvement.
           </p>
 
-          {/* Stats cards */}
           <div className="grid grid-cols-2 gap-4 mt-10 w-full max-w-sm">
             {[
               { value: "320K+", label: "Offres actives", icon: "💼" },

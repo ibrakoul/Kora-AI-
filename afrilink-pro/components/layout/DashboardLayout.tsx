@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Search,
   Bell,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import AppSidebar from "@/components/layout/AppSidebar";
 import Avatar from "@/components/ui/Avatar";
+import { useAuthContext } from "@/components/providers/AuthProvider";
 
 /* ============================================================
    AfriLink Pro – Dashboard Layout Wrapper
@@ -116,13 +118,18 @@ const mockNotifications = [
 export default function DashboardLayout({
   children,
   currentPath = "/dashboard",
-  user = {
-    name:     "Kofi Otieno",
-    role:     "Ingénieur Logiciel · Nairobi",
-    verified: true,
-    premium:  false,
-  },
+  user: userProp,
 }: DashboardLayoutProps) {
+  const { profile, signOut } = useAuthContext();
+  const router = useRouter();
+
+  const resolvedUser = userProp ?? {
+    name:     profile ? `${profile.first_name} ${profile.last_name}` : "Utilisateur",
+    role:     profile?.headline ?? "AfriLink Pro",
+    verified: profile?.is_verified ?? false,
+    premium:  profile ? profile.premium_tier !== 'free' : false,
+  };
+
   const [sidebarOpen,      setSidebarOpen]      = useState(false);
   const [userMenuOpen,     setUserMenuOpen]      = useState(false);
   const [notifOpen,        setNotifOpen]         = useState(false);
@@ -165,7 +172,7 @@ export default function DashboardLayout({
         className="hidden lg:flex flex-col shrink-0"
         style={{ width: SIDEBAR_WIDTH }}
       >
-        <AppSidebar currentPath={currentPath} user={user} />
+        <AppSidebar currentPath={currentPath} user={resolvedUser} />
       </div>
 
       {/* ──────────────── SIDEBAR (mobile, overlay) ──────────────── */}
@@ -187,7 +194,7 @@ export default function DashboardLayout({
         ].join(" ")}
         style={{ width: SIDEBAR_WIDTH }}
       >
-        <AppSidebar currentPath={currentPath} user={user} />
+        <AppSidebar currentPath={currentPath} user={resolvedUser} />
         <button
           onClick={() => setSidebarOpen(false)}
           className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 text-gray-400 hover:text-white transition-colors"
@@ -307,15 +314,15 @@ export default function DashboardLayout({
                 aria-haspopup="true"
               >
                 <Avatar
-                  src={user?.avatarSrc}
-                  name={user?.name}
+                  src={resolvedUser.avatarSrc}
+                  name={resolvedUser.name}
                   size="sm"
                   ring
-                  verified={user?.verified}
+                  verified={resolvedUser.verified}
                 />
                 <div className="hidden sm:block text-left">
-                  <p className="text-xs font-semibold text-gray-100 leading-none">{user?.name}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5 leading-none max-w-[100px] truncate">{user?.role}</p>
+                  <p className="text-xs font-semibold text-gray-100 leading-none">{resolvedUser.name}</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5 leading-none max-w-[100px] truncate">{resolvedUser.role}</p>
                 </div>
                 <ChevronDown
                   size={14}
@@ -335,8 +342,8 @@ export default function DashboardLayout({
                 >
                   {/* User header */}
                   <div className="px-4 py-3 border-b border-[#1f2d45]">
-                    <p className="text-sm font-semibold text-gray-100 truncate">{user?.name}</p>
-                    <p className="text-xs text-gray-500 truncate mt-0.5">{user?.role}</p>
+                    <p className="text-sm font-semibold text-gray-100 truncate">{resolvedUser.name}</p>
+                    <p className="text-xs text-gray-500 truncate mt-0.5">{resolvedUser.role}</p>
                   </div>
 
                   <div className="p-1.5 space-y-0.5">
@@ -371,9 +378,10 @@ export default function DashboardLayout({
                       icon={LogOut}
                       label="Déconnexion"
                       danger
-                      onClick={() => {
+                      onClick={async () => {
                         setUserMenuOpen(false);
-                        /* TODO: call sign-out handler */
+                        await signOut();
+                        router.push('/login');
                       }}
                     />
                   </div>
