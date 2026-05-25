@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   BookOpen, Play, Clock, Users, Star, Award, ChevronRight,
   Search, Filter, Zap, TrendingUp, Lock, CheckCircle,
@@ -19,140 +19,66 @@ const categories = [
   { label: "BTP", icon: "🏗️" },
 ];
 
-const courses = [
-  {
-    id: 1,
-    title: "Développement Web Full Stack avec React & Node.js",
-    instructor: "Ibrahima Kouyaté",
-    instructorRole: "Senior Dev @ Google",
-    rating: 4.9,
-    students: 12450,
-    duration: "42h",
-    lessons: 180,
-    level: "Intermédiaire",
-    price: "49.900 FCFA",
-    originalPrice: "99.900 FCFA",
-    category: "Tech & IA",
-    thumbnail: "💻",
+import type { CourseRow } from "@/types/database";
+
+type CourseVM = {
+  id: string;
+  title: string;
+  instructor: string;
+  instructorRole: string;
+  rating: number;
+  students: number;
+  duration: string;
+  lessons: number;
+  level: string;
+  price: string;
+  originalPrice: string;
+  category: string;
+  thumbnail: string;
+  color: string;
+  certified: boolean;
+  bestseller: boolean;
+  tags: string[];
+  desc: string;
+  progress: number;
+  enrolled: boolean;
+};
+
+const categoryIcon: Record<string, string> = {
+  "Tech & IA": "💻",
+  "Entrepreneurship": "🚀",
+  "Finance": "💰",
+  "Marketing": "📱",
+  "Design": "🎨",
+  "Leadership": "👑",
+  "Languages": "🗣️",
+  "BTP": "🏗️",
+};
+
+function apiToCourseVM(c: CourseRow): CourseVM {
+  return {
+    id: c.id,
+    title: c.title,
+    instructor: c.instructor_name,
+    instructorRole: "",
+    rating: Number(c.rating),
+    students: c.students_enrolled,
+    duration: `${c.duration_hours}h`,
+    lessons: c.lesson_count,
+    level: c.level === "Beginner" ? "Débutant" : c.level === "Intermediate" ? "Intermédiaire" : "Avancé",
+    price: c.price === 0 ? "Gratuit" : `${c.price.toLocaleString()} ${c.currency}`,
+    originalPrice: c.original_price ? `${c.original_price.toLocaleString()} ${c.currency}` : "",
+    category: c.category,
+    thumbnail: categoryIcon[c.category] ?? "📚",
     color: "blue",
-    certified: true,
-    bestseller: true,
-    tags: ["React", "Node.js", "MongoDB", "TypeScript"],
-    desc: "Maîtrisez le développement web moderne de A à Z. Ce cours complet vous guide de zéro jusqu'au déploiement d'applications professionnelles.",
+    certified: c.is_certified,
+    bestseller: c.is_bestseller,
+    tags: [],
+    desc: c.description,
     progress: 0,
     enrolled: false,
-  },
-  {
-    id: 2,
-    title: "Intelligence Artificielle & Machine Learning pour Africains",
-    instructor: "Dr. Aïssatou Bah",
-    instructorRole: "Chercheuse IA @ MIT Africa",
-    rating: 4.8,
-    students: 8920,
-    duration: "35h",
-    lessons: 140,
-    level: "Avancé",
-    price: "59.900 FCFA",
-    originalPrice: "120.000 FCFA",
-    category: "Tech & IA",
-    thumbnail: "🤖",
-    color: "emerald",
-    certified: true,
-    bestseller: false,
-    tags: ["Python", "TensorFlow", "Deep Learning", "NLP"],
-    desc: "Apprenez l'IA et le ML avec des cas d'usage africains concrets. Des datasets africains pour des problèmes africains.",
-    progress: 35,
-    enrolled: true,
-  },
-  {
-    id: 3,
-    title: "Entrepreneuriat & Startups en Afrique : De l'Idée à la Licorne",
-    instructor: "Chidi Okeke",
-    instructorRole: "Fondateur @ FinPay Africa",
-    rating: 4.9,
-    students: 21300,
-    duration: "28h",
-    lessons: 95,
-    level: "Débutant",
-    price: "39.900 FCFA",
-    originalPrice: "79.000 FCFA",
-    category: "Entrepreneuriat",
-    thumbnail: "🚀",
-    color: "orange",
-    certified: true,
-    bestseller: true,
-    tags: ["Startup", "Pitch", "Levée de fonds", "Business Model"],
-    desc: "Tout ce qu'il faut savoir pour créer et scaler une startup en Afrique. Témoignages d'entrepreneurs africains à succès inclus.",
-    progress: 0,
-    enrolled: false,
-  },
-  {
-    id: 4,
-    title: "Finance d'Entreprise & Fintech en Afrique",
-    instructor: "Amara Camara",
-    instructorRole: "CFO @ Wave Mobile",
-    rating: 4.7,
-    students: 6780,
-    duration: "20h",
-    lessons: 78,
-    level: "Intermédiaire",
-    price: "44.900 FCFA",
-    originalPrice: "89.000 FCFA",
-    category: "Finance",
-    thumbnail: "💰",
-    color: "yellow",
-    certified: true,
-    bestseller: false,
-    tags: ["Finance", "Fintech", "Comptabilité", "Investissement"],
-    desc: "Comprenez les mécanismes financiers spécifiques au contexte africain. Mobile money, microfinance, marchés financiers africains.",
-    progress: 72,
-    enrolled: true,
-  },
-  {
-    id: 5,
-    title: "Marketing Digital & Réseaux Sociaux pour le Marché Africain",
-    instructor: "Fatou Ndiaye",
-    instructorRole: "Head of Marketing @ Jumia",
-    rating: 4.8,
-    students: 15600,
-    duration: "18h",
-    lessons: 68,
-    level: "Débutant",
-    price: "29.900 FCFA",
-    originalPrice: "59.000 FCFA",
-    category: "Marketing",
-    thumbnail: "📱",
-    color: "purple",
-    certified: false,
-    bestseller: true,
-    tags: ["SEO", "Social Media", "Facebook Ads", "Content"],
-    desc: "Stratégies marketing adaptées aux réalités africaines. Atteignez des millions de consommateurs africains en ligne.",
-    progress: 0,
-    enrolled: false,
-  },
-  {
-    id: 6,
-    title: "UI/UX Design : Créer des Expériences pour l'Afrique",
-    instructor: "Mariama Bah",
-    instructorRole: "Principal Designer @ Orange",
-    rating: 4.9,
-    students: 9840,
-    duration: "32h",
-    lessons: 115,
-    level: "Intermédiaire",
-    price: "54.900 FCFA",
-    originalPrice: "109.000 FCFA",
-    category: "Design",
-    thumbnail: "🎨",
-    color: "pink",
-    certified: true,
-    bestseller: false,
-    tags: ["Figma", "User Research", "Prototypage", "Design System"],
-    desc: "Apprenez à concevoir des interfaces qui résonnent avec les utilisateurs africains. Accessibilité, langues locales, contraintes réseau.",
-    progress: 0,
-    enrolled: false,
-  },
-];
+  };
+}
 
 const colorVariants: Record<string, string> = {
   blue: "from-blue-900/40 to-blue-950/60 border-blue-500/20",
@@ -174,11 +100,31 @@ const starColor: Record<string, string> = {
 
 export default function FormationsPage() {
   const [activeCategory, setActiveCategory] = useState("Tout");
-  const [view, setView] = useState<"grid" | "list">("grid");
+  const [courses, setCourses] = useState<CourseVM[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = activeCategory === "Tout"
-    ? courses
-    : courses.filter((c) => c.category === activeCategory);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ limit: "12" });
+        if (activeCategory !== "Tout") {
+          const cat = categories.find(c => c.label === activeCategory)?.label ?? activeCategory;
+          params.set("category", cat);
+        }
+        const res = await fetch(`/api/courses?${params}`);
+        const data = await res.json();
+        setCourses((data.courses ?? []).map(apiToCourseVM));
+      } catch {
+        setCourses([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [activeCategory]);
+
+  const filtered = courses;
 
   return (
     <div className="min-h-screen bg-[#0A0F1C]">
