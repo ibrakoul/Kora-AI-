@@ -1,104 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   GraduationCap, Search, MapPin, Clock, Building2, Star,
-  ArrowUpRight, BookmarkPlus, Zap, Users, Award, ChevronRight,
-  Briefcase, CheckCircle
+  ArrowUpRight, BookmarkPlus, Zap, Users, Award,
+  CheckCircle, Loader2
 } from "lucide-react";
-
-const internships = [
-  {
-    id: 1,
-    title: "Stage Développement Web Full Stack",
-    company: "Wave Mobile Money",
-    logo: "WM",
-    color: "blue",
-    location: "Dakar, Sénégal",
-    duration: "6 mois",
-    level: "Bac+3/4",
-    sector: "Tech",
-    paid: true,
-    indemnity: "150.000 FCFA/mois",
-    skills: ["React", "Node.js", "JavaScript"],
-    desc: "Rejoignez l'équipe engineering de Wave pour développer des fonctionnalités de notre app de paiement mobile. Encadrement par un senior dev.",
-    deadline: "30 Mai 2025",
-    saved: false,
-    featured: true,
-  },
-  {
-    id: 2,
-    title: "Stage Data Science & IA",
-    company: "Orange Digital Center",
-    logo: "OD",
-    color: "orange",
-    location: "Abidjan, Côte d'Ivoire",
-    duration: "4 mois",
-    level: "Bac+4/5",
-    sector: "IA / Data",
-    paid: true,
-    indemnity: "180.000 FCFA/mois",
-    skills: ["Python", "Machine Learning", "Pandas"],
-    desc: "Travailler sur des modèles de prédiction pour améliorer la qualité réseau Orange en Afrique. Accès aux données réelles.",
-    deadline: "15 Juin 2025",
-    saved: true,
-    featured: true,
-  },
-  {
-    id: 3,
-    title: "Stage Marketing Digital & Growth",
-    company: "Jumia Côte d'Ivoire",
-    logo: "JU",
-    color: "emerald",
-    location: "Abidjan, CI",
-    duration: "3 mois",
-    level: "Bac+3",
-    sector: "Marketing",
-    paid: true,
-    indemnity: "100.000 FCFA/mois",
-    skills: ["SEO", "Social Media", "Analytics"],
-    desc: "Appui à l'équipe marketing pour les campagnes acquisition et fidélisation. Exposition directe aux outils digitaux professionnels.",
-    deadline: "10 Mai 2025",
-    saved: false,
-    featured: false,
-  },
-  {
-    id: 4,
-    title: "Stage Finance & Contrôle de Gestion",
-    company: "Ecobank Sénégal",
-    logo: "EB",
-    color: "blue",
-    location: "Dakar, Sénégal",
-    duration: "6 mois",
-    level: "Bac+4 Finance",
-    sector: "Finance",
-    paid: true,
-    indemnity: "120.000 FCFA/mois",
-    skills: ["Excel", "SAP", "Comptabilité"],
-    desc: "Participation aux travaux de clôture mensuelle, reporting financier et analyse des coûts au sein de la Direction Financière.",
-    deadline: "25 Mai 2025",
-    saved: false,
-    featured: false,
-  },
-  {
-    id: 5,
-    title: "Stage UI/UX Design d'Applications Mobile",
-    company: "AfriTech Solutions",
-    logo: "AT",
-    color: "purple",
-    location: "Dakar, Sénégal · Remote possible",
-    duration: "4 mois",
-    level: "Bac+3 Design",
-    sector: "Design",
-    paid: true,
-    indemnity: "130.000 FCFA/mois",
-    skills: ["Figma", "Prototypage", "User Research"],
-    desc: "Concevoir l'UX de nouvelles fonctionnalités de notre super-app africaine. Travail direct avec le Product Manager et l'équipe dev.",
-    deadline: "20 Mai 2025",
-    saved: true,
-    featured: false,
-  },
-];
+import type { InternshipRow } from "@/types/database";
+import { fetchInternships } from "@/lib/api/internships";
 
 const logoColors: Record<string, string> = {
   blue: "bg-blue-500/20 text-blue-400 border-blue-500/30",
@@ -107,26 +16,61 @@ const logoColors: Record<string, string> = {
   purple: "bg-purple-500/20 text-purple-400 border-purple-500/30",
 };
 
+const COLORS = ["blue", "orange", "emerald", "purple"] as const;
+function itemColor(id: string): string {
+  const sum = id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  return COLORS[sum % COLORS.length];
+}
+
+function companyInitials(name: string): string {
+  const words = name.split(" ");
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function formatDeadline(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  return new Date(dateStr).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+}
+
 const mentors = [
   { name: "Dr. Ibrahima Sow", role: "DG @ FinTech Africa", avatar: "IS", color: "emerald", sessions: 24 },
   { name: "Ama Asante", role: "VP Engineering @ Google", avatar: "AA", color: "blue", sessions: 18 },
   { name: "Mariama Diallo", role: "Chief Product @ Wave", avatar: "MD", color: "orange", sessions: 31 },
 ];
 
+const SECTORS = ["Tous", "Tech", "Finance", "Marketing", "Design", "IA / Data", "BTP", "Santé"];
+
 export default function StagesPage() {
-  const [savedItems, setSavedItems] = useState<Set<number>>(new Set([2, 5]));
+  const [internships, setInternships] = useState<InternshipRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [sector, setSector] = useState("Tous");
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
-  const sectors = ["Tous", "Tech", "Finance", "Marketing", "Design", "IA / Data", "BTP", "Santé"];
+  const load = useCallback(async (s: string) => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = { limit: "20" };
+      if (s !== "Tous") params.sector = s;
+      const data = await fetchInternships(params);
+      setInternships(data);
+    } catch {
+      setInternships([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const toggleSave = (id: number) =>
-    setSavedItems((prev) => {
+  useEffect(() => {
+    load(sector);
+  }, [sector, load]);
+
+  const toggleSave = (id: string) =>
+    setSavedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-
-  const filtered = sector === "Tous" ? internships : internships.filter((i) => i.sector === sector);
 
   return (
     <div className="min-h-screen bg-[#0A0F1C]">
@@ -137,7 +81,7 @@ export default function StagesPage() {
         <div className="relative max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold mb-5">
             <GraduationCap size={13} />
-            24,800 stages disponibles en Afrique · Mis à jour quotidiennement
+            Stages disponibles en Afrique · Mis à jour quotidiennement
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3">
             Lancez votre{" "}
@@ -163,7 +107,7 @@ export default function StagesPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           {[
-            { label: "Stages disponibles", value: "24,800", icon: Briefcase, color: "emerald" },
+            { label: "Stages disponibles", value: "24,800", icon: GraduationCap, color: "emerald" },
             { label: "Entreprises partenaires", value: "3,400", icon: Building2, color: "blue" },
             { label: "Jeunes placés en 2024", value: "48,200", icon: Users, color: "orange" },
             { label: "Mentors disponibles", value: "1,240", icon: Award, color: "purple" },
@@ -193,7 +137,7 @@ export default function StagesPage() {
           <div className="lg:col-span-2">
             {/* Sector tabs */}
             <div className="flex gap-2 overflow-x-auto no-scrollbar pb-4 mb-4">
-              {sectors.map((s) => (
+              {SECTORS.map((s) => (
                 <button
                   key={s}
                   onClick={() => setSector(s)}
@@ -208,67 +152,85 @@ export default function StagesPage() {
               ))}
             </div>
 
-            <div className="space-y-4">
-              {filtered.map((item) => (
-                <div key={item.id} className={`card-premium p-5 group ${item.featured ? "border-emerald-500/20" : ""}`}>
-                  {item.featured && (
-                    <div className="flex items-center gap-1.5 mb-3">
-                      <Star size={12} className="text-yellow-400" fill="currentColor" />
-                      <span className="text-xs text-yellow-400 font-semibold">Stage mis en avant</span>
-                    </div>
-                  )}
-
-                  <div className="flex items-start gap-4">
-                    <div className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold text-sm shrink-0 ${logoColors[item.color]}`}>
-                      {item.logo}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between mb-1">
-                        <h3 className="font-semibold text-white group-hover:text-emerald-400 transition-colors">{item.title}</h3>
-                        <button
-                          onClick={() => toggleSave(item.id)}
-                          className={`shrink-0 ml-2 transition-colors ${savedItems.has(item.id) ? "text-emerald-400" : "text-gray-600 hover:text-gray-400"}`}
-                        >
-                          <BookmarkPlus size={18} fill={savedItems.has(item.id) ? "currentColor" : "none"} />
-                        </button>
-                      </div>
-
-                      <div className="flex items-center gap-3 text-sm text-gray-500 mb-2 flex-wrap">
-                        <span className="flex items-center gap-1"><Building2 size={12} />{item.company}</span>
-                        <span className="flex items-center gap-1"><MapPin size={12} />{item.location}</span>
-                        <span className="flex items-center gap-1"><Clock size={12} />{item.duration}</span>
-                      </div>
-
-                      <p className="text-sm text-gray-500 mb-3 truncate-2">{item.desc}</p>
-
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        {item.skills.map((s) => (
-                          <span key={s} className="px-2.5 py-1 text-xs bg-[#1a2236] border border-[#1f2d45] text-gray-400 rounded-lg">{s}</span>
-                        ))}
-                      </div>
-
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center gap-3 text-xs">
-                          {item.paid && (
-                            <span className="flex items-center gap-1 text-emerald-400 font-semibold">
-                              💰 {item.indemnity}
-                            </span>
-                          )}
-                          <span className="text-gray-600 flex items-center gap-1">
-                            <GraduationCap size={11} />{item.level}
-                          </span>
-                          <span className="text-gray-600">Limite: {item.deadline}</span>
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 size={32} className="text-emerald-400 animate-spin" />
+              </div>
+            ) : internships.length === 0 ? (
+              <div className="text-center py-16 text-gray-600">
+                <GraduationCap size={40} className="mx-auto mb-3 opacity-30" />
+                <p className="font-medium text-gray-400">Aucun stage disponible</p>
+                <p className="text-sm mt-1">Essayez un autre secteur</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {internships.map((item) => {
+                  const color = itemColor(item.id);
+                  const isSaved = savedIds.has(item.id);
+                  return (
+                    <div key={item.id} className={`card-premium p-5 group ${item.is_featured ? "border-emerald-500/20" : ""}`}>
+                      {item.is_featured && (
+                        <div className="flex items-center gap-1.5 mb-3">
+                          <Star size={12} className="text-yellow-400" fill="currentColor" />
+                          <span className="text-xs text-yellow-400 font-semibold">Stage mis en avant</span>
                         </div>
-                        <button className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-semibold hover:bg-emerald-500/20 transition-all">
-                          Postuler <ArrowUpRight size={12} />
-                        </button>
+                      )}
+
+                      <div className="flex items-start gap-4">
+                        <div className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold text-sm shrink-0 ${logoColors[color]}`}>
+                          {companyInitials(item.company_name)}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between mb-1">
+                            <h3 className="font-semibold text-white group-hover:text-emerald-400 transition-colors">{item.title}</h3>
+                            <button
+                              onClick={() => toggleSave(item.id)}
+                              className={`shrink-0 ml-2 transition-colors ${isSaved ? "text-emerald-400" : "text-gray-600 hover:text-gray-400"}`}
+                            >
+                              <BookmarkPlus size={18} fill={isSaved ? "currentColor" : "none"} />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-3 text-sm text-gray-500 mb-2 flex-wrap">
+                            <span className="flex items-center gap-1"><Building2 size={12} />{item.company_name}</span>
+                            <span className="flex items-center gap-1"><MapPin size={12} />{item.location}</span>
+                            <span className="flex items-center gap-1"><Clock size={12} />{item.duration_months} mois</span>
+                          </div>
+
+                          <p className="text-sm text-gray-500 mb-3 line-clamp-2">{item.description}</p>
+
+                          <div className="flex flex-wrap gap-1.5 mb-3">
+                            {item.skills_required.slice(0, 4).map((s) => (
+                              <span key={s} className="px-2.5 py-1 text-xs bg-[#1a2236] border border-[#1f2d45] text-gray-400 rounded-lg">{s}</span>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-3 text-xs">
+                              {item.is_paid && item.indemnity_amount && (
+                                <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+                                  💰 {item.indemnity_amount.toLocaleString()} {item.indemnity_currency}/mois
+                                </span>
+                              )}
+                              <span className="text-gray-600 flex items-center gap-1">
+                                <GraduationCap size={11} />{item.education_level}
+                              </span>
+                              {item.deadline && (
+                                <span className="text-gray-600">Limite: {formatDeadline(item.deadline)}</span>
+                              )}
+                            </div>
+                            <button className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-semibold hover:bg-emerald-500/20 transition-all">
+                              Postuler <ArrowUpRight size={12} />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Right panel */}
@@ -290,7 +252,7 @@ export default function StagesPage() {
               <div className="space-y-2 mb-4">
                 {[
                   { label: "Profil créé", done: true },
-                  { label: "CV uploadé", done: true },
+                  { label: "CV uploadé", done: false },
                   { label: "Compétences ajoutées", done: false },
                   { label: "Lettre de motivation", done: false },
                 ].map(({ label, done }) => (
