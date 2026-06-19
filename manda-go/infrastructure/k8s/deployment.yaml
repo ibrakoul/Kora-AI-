@@ -1,0 +1,262 @@
+---
+# =============================================================
+# NAMESPACE
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: manda-go-production
+  labels:
+    app: manda-go
+    environment: production
+
+---
+# =============================================================
+# CONFIGMAP
+# =============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: manda-api-config
+  namespace: manda-go-production
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  AWS_REGION: "eu-west-1"
+  CORS_ORIGIN: "https://mandago.app,https://app.mandago.app"
+  LOG_LEVEL: "warn"
+
+---
+# =============================================================
+# DEPLOYMENT
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: manda-api
+  namespace: manda-go-production
+  labels:
+    app: manda-api
+    version: IMAGE_TAG
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: manda-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: manda-api
+        version: IMAGE_TAG
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/api/v1/metrics"
+    spec:
+      serviceAccountName: manda-api-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: manda-api
+          image: 123456789.dkr.ecr.eu-west-1.amazonaws.com/manda-go-api:IMAGE_TAG
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: manda-api-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: manda-api-secrets
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: manda-api-secrets
+                  key: REDIS_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: manda-api-secrets
+                  key: JWT_SECRET
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: manda-api-secrets
+                  key: OPENAI_API_KEY
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: manda-api-secrets
+                  key: STRIPE_SECRET_KEY
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+      terminationGracePeriodSeconds: 60
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: manda-api
+
+---
+# =============================================================
+# SERVICE
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: manda-api-service
+  namespace: manda-go-production
+  labels:
+    app: manda-api
+spec:
+  type: ClusterIP
+  selector:
+    app: manda-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+      protocol: TCP
+
+---
+# =============================================================
+# HORIZONTAL POD AUTOSCALER
+# =============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: manda-api-hpa
+  namespace: manda-go-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: manda-api
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+
+---
+# =============================================================
+# INGRESS
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: manda-api-ingress
+  namespace: manda-go-production
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://mandago.app,https://app.mandago.app"
+spec:
+  tls:
+    - hosts:
+        - api.mandago.app
+      secretName: manda-api-tls
+  rules:
+    - host: api.mandago.app
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: manda-api-service
+                port:
+                  number: 80
+
+---
+# =============================================================
+# SERVICE ACCOUNT
+# =============================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: manda-api-sa
+  namespace: manda-go-production
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/manda-go-api-role
+
+---
+# =============================================================
+# POD DISRUPTION BUDGET
+# =============================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: manda-api-pdb
+  namespace: manda-go-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: manda-api

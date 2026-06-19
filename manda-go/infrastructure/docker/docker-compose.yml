@@ -1,0 +1,146 @@
+version: '3.9'
+
+services:
+  # ============================================================
+  # API NestJS
+  # ============================================================
+  manda-api:
+    build:
+      context: ../../backend
+      dockerfile: ../infrastructure/docker/Dockerfile
+      target: development
+    container_name: manda-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://manda_user:manda_pass@manda-db:5432/manda_go
+      REDIS_URL: redis://manda-redis:6379
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
+      JWT_EXPIRATION: 15m
+      JWT_REFRESH_EXPIRATION: 7d
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      AWS_REGION: ${AWS_REGION:-eu-west-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-manda-go-media-dev}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      CORS_ORIGIN: http://localhost:3001
+    volumes:
+      - ../../backend/src:/app/src
+      - /app/node_modules
+    depends_on:
+      manda-db:
+        condition: service_healthy
+      manda-redis:
+        condition: service_healthy
+    networks:
+      - manda-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================================
+  # PostgreSQL 15
+  # ============================================================
+  manda-db:
+    image: postgres:15-alpine
+    container_name: manda-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: manda_go
+      POSTGRES_USER: manda_user
+      POSTGRES_PASSWORD: manda_pass
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - manda_postgres_data:/var/lib/postgresql/data
+      - ../../database/001_init_schema.sql:/docker-entrypoint-initdb.d/001_init_schema.sql
+      - ../../database/002_seed_data.sql:/docker-entrypoint-initdb.d/002_seed_data.sql
+    networks:
+      - manda-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manda_user -d manda_go"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # Redis 7
+  # ============================================================
+  manda-redis:
+    image: redis:7-alpine
+    container_name: manda-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - manda_redis_data:/data
+    networks:
+      - manda-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # Adminer (DB UI)
+  # ============================================================
+  manda-adminer:
+    image: adminer:latest
+    container_name: manda-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: manda-db
+      ADMINER_DESIGN: pepa-linha-dark
+    depends_on:
+      - manda-db
+    networks:
+      - manda-network
+    profiles:
+      - dev-tools
+
+  # ============================================================
+  # Redis Commander (Redis UI)
+  # ============================================================
+  manda-redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: manda-redis-commander
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      REDIS_HOSTS: local:manda-redis:6379
+    depends_on:
+      - manda-redis
+    networks:
+      - manda-network
+    profiles:
+      - dev-tools
+
+# ============================================================
+# VOLUMES
+# ============================================================
+volumes:
+  manda_postgres_data:
+    driver: local
+  manda_redis_data:
+    driver: local
+
+# ============================================================
+# RÉSEAUX
+# ============================================================
+networks:
+  manda-network:
+    driver: bridge
+    name: manda-network
