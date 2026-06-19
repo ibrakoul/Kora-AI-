@@ -1,0 +1,19 @@
+# Claude Code internal
+.claude/worktrees/
+
+# Node
+node_modules/
+.env
+.env.local
+.env.production
+
+# Flutter
+.dart_tool/
+build/
+*.g.dart
+*.freezed.dart
+
+# General
+.DS_Store
+*.log
+dist/
