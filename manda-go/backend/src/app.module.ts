@@ -18,6 +18,7 @@ import { AiModule } from './modules/ai/ai.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { HealthModule } from './health/health.module';
 
 import { User } from './modules/users/entities/user.entity';
 import { Lesson } from './modules/learning/entities/lesson.entity';
@@ -181,6 +182,7 @@ import { Streak } from './modules/gamification/entities/streak.entity';
     GamificationModule,
     SubscriptionsModule,
     NotificationsModule,
+    HealthModule,
   ],
   providers: [
     // Global throttle guard

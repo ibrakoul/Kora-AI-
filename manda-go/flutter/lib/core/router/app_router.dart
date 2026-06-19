@@ -10,7 +10,11 @@ import '../../features/lessons/presentation/pages/lesson_map_page.dart';
 import '../../features/lessons/presentation/pages/lesson_detail_page.dart';
 import '../../features/ai_chat/presentation/pages/ai_chat_page.dart';
 import '../../features/gamification/presentation/pages/leaderboard_page.dart';
+import '../../features/mini_games/presentation/pages/mini_games_hub_page.dart';
+import '../../features/premium/presentation/pages/premium_page.dart';
+import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/pronunciation/presentation/pages/pronunciation_page.dart';
+import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/onboarding/presentation/pages/onboarding_page.dart';
 import '../../shared/widgets/bottom_nav_bar.dart';
 
@@ -165,7 +169,7 @@ class AppRouter {
             name: 'profile',
             pageBuilder: (context, state) => _buildNoTransitionPage(
               state: state,
-              child: const _ProfilePlaceholderPage(),
+              child: const ProfilePage(),
             ),
           ),
         ],
@@ -194,7 +198,27 @@ class AppRouter {
         name: 'settings',
         pageBuilder: (context, state) => _buildSlidePage(
           state: state,
-          child: const _SettingsPlaceholderPage(),
+          child: const SettingsPage(),
+        ),
+      ),
+
+      // Mini Games Hub
+      GoRoute(
+        path: '/mini-games',
+        name: 'mini_games',
+        pageBuilder: (context, state) => _buildSlidePage(
+          state: state,
+          child: const MiniGamesHubPage(),
+        ),
+      ),
+
+      // Premium Upgrade
+      GoRoute(
+        path: '/premium',
+        name: 'premium',
+        pageBuilder: (context, state) => _buildSlidePage(
+          state: state,
+          child: const PremiumPage(),
         ),
       ),
     ];
@@ -323,30 +347,6 @@ class _SplashPageState extends State<_SplashPage> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ProfilePlaceholderPage extends StatelessWidget {
-  const _ProfilePlaceholderPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
-      body: const Center(child: Text('Profile Page')),
-    );
-  }
-}
-
-class _SettingsPlaceholderPage extends StatelessWidget {
-  const _SettingsPlaceholderPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: const Center(child: Text('Settings Page')),
     );
   }
 }
